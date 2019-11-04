@@ -1,0 +1,222 @@
+// $Id: FragmentGrammar.jj,v 1.8 2010/11/02 08:23:28 ylafon Exp $
+//
+// (c) COPYRIGHT MIT, ERCIM and Keio University, 2009 and onwards.
+// Please first read the full copyright statement at the URI below
+// http://www.w3.org/Consortium/Legal/2002/copyright-software-20021231
+
+options {
+    IGNORE_CASE   = false;
+    STATIC        = false;
+    UNICODE_INPUT = false;
+/*      
+    DEBUG_TOKEN_MANAGER = true; 
+    DEBUG_PARSER        = true;      
+*/
+}
+
+PARSER_BEGIN(FragmentParser)
+
+import java.io.StringReader;
+import java.io.IOException;
+
+public class FragmentParser {
+
+    FragmentParser() {
+    }
+
+    public static void main(String args[]) {
+	if (args.length < 1) {
+	    System.err.println("Not enought parameters");
+	    System.exit(1);
+	}
+	for (int i=0; i< args.length; i++) {
+	    String param = args[i];
+	    System.out.println("Checking: "+param);
+	    if (param.indexOf("#") >= 0) {
+		param = param.substring(param.indexOf("#")+1);
+	    } else if (param.indexOf("?") >= 0) {
+		param = param.substring(param.indexOf("?")+1);
+	    }
+	    StringReader sr = new StringReader(param);
+	    try {
+		new FragmentParser(sr).parserUnit();
+		System.out.println("OK");
+	    } catch (Exception ex) {
+		System.out.println("failed");
+	    }
+	}
+    }
+}
+PARSER_END(FragmentParser)
+
+/*
+ * The tokenizer 
+ */
+
+<DEFAULT>
+	TOKEN :
+{
+  <TIMEPREFIX: ( "t" | "%74" ) >
+  | <TIMEUNIT: ( "s" | "%73" ) >
+  | < DEFTIMEFORMAT : ( "n" | "%6e" | "%6E" ) ( "p" | "%70" ) ( "t" | "%74" ) >
+  | < TIMEFORMAT    : ( "s" | "%73" ) ( "m" | "%6d" | "%6D" ) ( "p" | "%70" ) ( "t" | "%74" ) ( "e" | "%65" ) ( "-" ( ( ( "2" | "%32" ) ( "5" | "%35" ) ) | ( ( "3" | "%33" ) ( "0" | "%30" ) ( "-" ( "d" | "%64" ) ( "r" | "%72" ) ( "o" | "%6f" | "%6F" ) ( "p" | "%70" ) )? ) ) )? > 
+  | < XYWHPREFIX   : ( "x" | "%78" ) ( "y" | "%79" ) ( "w" | "%77" ) ( "h" | "%68" ) >
+  | < XYWHUNIT : ( ( "p" | "%70" ) ( "i" | "%69" ) ( "x" | "%78" ) ( "e" | "%65" ) ( "l" | "%6c" | "%6C" ) ) | ( ( "p" | "%70" ) ( "e" | "%65" ) ( "r" | "%72" ) ( "c" | "%63" ) ( "e" | "%65" ) ( "n" | "%6e" | "%6E" ) ( "t" | "%74" ) ) >
+  | < TRACKPREFIX : ( "t" | "%74" ) ( "r" | "%72" ) ( "a" | "%61" ) ( "c" | "%63" ) ( "k" | "%6b" | "%6B" ) >
+  | < NAMEPREFIX : ( "i" | "%69" ) ( "d" | "%64" ) >
+}
+
+<DEFAULT>
+    TOKEN :
+{
+    < COLON : ":" >
+  | < EQ    : "=" >
+  | < AMP   : "&" >
+  | < COMMA : "," >
+  | < DOT   : ( "." | "%2E" | "%2e" ) >
+}
+
+<DEFAULT>
+    TOKEN : /* rfc2234 */
+{
+    < #ALPHA  : ["A"-"Z","a"-"z"] >
+  | < DIGIT  : ["0"-"9"] >
+  | < #HEXDIG : ( <DIGIT> | ["A"-"F","a"-"f"] ) >
+}
+
+<DEFAULT>
+    TOKEN : /* rfc3986 */
+{
+  <PDIGIT : "%3" <DIGIT> >
+  | < UNRESERVED   : <ALPHA> | <DIGIT> | "-" | "." | "_" | "~" >
+  | < PCT_ENCODED  : "%" <HEXDIG> <HEXDIG> >
+  | < SUB_DELIMS   : "!" | "$" | "&" | "'" | "(" | ")" | "*" | "+" | "," | ";" | "=" >
+}
+
+
+////////////////////////////////////////////////////////////////////
+//                     End of Lexical Scanner                     // 
+////////////////////////////////////////////////////////////////////
+
+void pdigit() :
+{}
+{
+ ( <DIGIT> | <PDIGIT> )
+}
+
+void utf8string() :
+{}
+{
+ ( <UNRESERVED> | <PCT_ENCODED> | <TIMEPREFIX> | <TIMEUNIT> | <DEFTIMEFORMAT> | <XYWHPREFIX> | <XYWHUNIT> | <TRACKPREFIX> | <NAMEPREFIX> | <DIGIT> | <PDIGIT> )+ 
+}
+
+void parserUnit() :
+{}
+{
+    mediasegment()
+    <EOF>
+}
+
+void mediasegment() :
+{}
+{
+    namesegment() | axissegment()
+}
+
+void namesegment() :
+{}
+{
+    ( <NAMEPREFIX> <EQ> nameparam() )
+}
+
+void nameparam() :
+{}
+{
+    utf8string()
+}
+
+void axissegment() :
+{
+    boolean gottime  = false;
+    boolean gotspace = false;
+    boolean gottrack = false;
+}
+{
+    // implement the grammar + the restriction in the prose
+    ( timesegment() { gottime = true; } 
+      | spacesegment() { gotspace = true; } 
+      | tracksegment() { gottrack = true; }
+      ) 
+	( <AMP> ( timesegment() { if (gottime) throw new ParseException(); gottime = true; }
+		  | spacesegment() { if (gotspace) throw new ParseException(); gotspace = true; }
+		  | tracksegment() { if (gottrack) throw new ParseException(); gottrack = true; }
+		  ) )* 
+	}
+
+void timesegment() :
+{}
+{
+    <TIMEPREFIX> <EQ> timeparam()
+}
+
+void timeparam() :
+{}
+{
+    npttimedef() | othertimedef()
+}
+
+void npttimedef() :
+{}
+{
+    ( <DEFTIMEFORMAT> <COLON> )? ( ( clocktime() ( <COMMA> clocktime() )? ) | ( <COMMA> clocktime() ) )
+}
+
+void clocktime() :
+{}
+{
+    ( pdigit() )+ ( ( <DOT> ( pdigit() )* ( <TIMEUNIT> )? )
+                   | ( <COLON> pdigit() pdigit() ( <COLON> pdigit() pdigit() )? ( <DOT> ( pdigit() )* )? ) )?
+}
+
+void othertimedef() :
+{}
+{
+    <TIMEFORMAT> <COLON>  ( ( frametime() ( <COMMA> frametime() )? ) | ( <COMMA> frametime() ) )
+}
+
+void frametime() :
+{}
+{
+    ( pdigit() )+ <COLON> pdigit() pdigit() <COLON> pdigit() pdigit() ( <COLON> pdigit() pdigit() ( <DOT> pdigit() pdigit() )? )?
+}
+
+void spacesegment() :
+{}
+{
+    xywhdef() 
+}
+
+void xywhdef() :
+{}
+{
+    <XYWHPREFIX> <EQ> xywhparam()
+}
+
+void xywhparam() : 
+{}
+{
+    ( <XYWHUNIT> <COLON> )? ( pdigit() )+ <COMMA> ( pdigit() )+ <COMMA> ( pdigit() )+ <COMMA> ( pdigit() )+
+}
+
+void tracksegment() :
+{}
+{
+    <TRACKPREFIX> <EQ> trackparam()
+}
+
+void trackparam() :
+{}
+{
+    utf8string()
+}
+
