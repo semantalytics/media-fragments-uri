@@ -7,19 +7,8 @@ import org.parboiled.annotations.BuildParseTree;
 @BuildParseTree
 public class MediaFragmentUriParser extends BaseParser<Object> {
 
-    Rule TimePrefix() {
-        return FirstOf( "t", "%74" );
-    }
-
     Rule TimeUnit() {
         return FirstOf("s", "%73" );
-    }
-
-    Rule DefTimeFormat () {
-        return Sequence(
-                FirstOf( "n", "%6e", "%6E" ),
-                FirstOf( "p", "%70" ),
-                FirstOf( "t", "%74" ));
     }
 
     Rule TimeFormat() {
@@ -92,13 +81,6 @@ public class MediaFragmentUriParser extends BaseParser<Object> {
                 FirstOf( "c", "%63" ),
                 FirstOf( "k", "%6b", "%6B" )
         );
-    }
-
-    Rule NamePrefix() {
-            return Sequence(
-                    FirstOf( "i", "%69" ),
-                    FirstOf( "d", "%64" )
-            );
     }
 
     Rule Colon() {
@@ -195,23 +177,22 @@ public class MediaFragmentUriParser extends BaseParser<Object> {
         );
     }
 
+    Rule NamePrefix() {
+        return Sequence(
+                FirstOf( "i", "%69" ),
+                FirstOf( "d", "%64" )
+        );
+    }
+
     Rule NameParam() {
         return Utf8String();
     }
 
-    Rule AxisSegment()  {
-        boolean gottime  = false;
-        boolean gotspace = false;
-        boolean gottrack = false;
-        // implement the grammar + the restriction in the prose
-        ( TimeSegment() { gottime = true; }
-      | SpaceSegment() { gotspace = true; }
-      | TrackSegment() { gottrack = true; }
-      )
-        ( <AMP> ( TimeSegment() { if (gottime) throw new ParseException(); gottime = true; }
-		  | SpaceSegment() { if (gotspace) throw new ParseException(); gotspace = true; }
-		  | TrackSegment() { if (gottrack) throw new ParseException(); gottrack = true; }
-		  ) )*
+    Rule AxisSegment() {
+        return FirstOf(
+                Sequence(TimeSegment(), "&", TestNot(OneOrMore(TimeSegment()))),
+                Sequence(SpaceSegment(), "&", TestNot(OneOrMore(SpaceSegment()))),
+                Sequence(TrackSegment(), "&", TestNot(OneOrMore(TrackSegment()))));
     }
 
     Rule TimeSegment() {
@@ -220,6 +201,10 @@ public class MediaFragmentUriParser extends BaseParser<Object> {
                 Eq(),
                 TimeParam()
         );
+    }
+
+    Rule TimePrefix() {
+        return FirstOf( "t", "%74" );
     }
 
     Rule TimeParam() {
@@ -251,6 +236,13 @@ public class MediaFragmentUriParser extends BaseParser<Object> {
                        )
                )
        );
+    }
+
+    Rule DefTimeFormat () {
+        return Sequence(
+                FirstOf( "n", "%6e", "%6E" ),
+                FirstOf( "p", "%70" ),
+                FirstOf( "t", "%74" ));
     }
 
     Rule ClockTime() {
